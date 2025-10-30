@@ -19,6 +19,10 @@ class Server:
 		return int.from_bytes(data, 'little')
 
 	async def pack_and_send_msg(self, PACKETTYPE, writer, *data):
+		if PACKETTYPE == PACKETTYPE_INFO_STATUS:
+			writer.write(bytes([PACKETTYPE_INFO_STATUS]) + bytes([data[0]]))
+			await writer.drain()
+
 		if PACKETTYPE == PACKETTYPE_CL_MSG:
 			name_encoded = data[0].encode('utf-8')
 			name_encoded_length = struct.pack("<B", len(name_encoded))
@@ -87,14 +91,14 @@ class Server:
 
 			for w, clname in self.clients.items():
 				if name == clname:
-					writer.write(bytes([PACKETTYPE_INFOSTATUS]) + struct.pack("<?", False))
+					await self.pack_and_send_msg(PACKETTYPE_INFO_STATUS, writer, INFO_STATUS_NAME_TAKEN)
 					return None, "name already exists"
 			if not name:
-				writer.write(bytes([PACKETTYPE_INFOSTATUS]) + struct.pack("<?", False))
+				await self.pack_and_send_msg(PACKETTYPE_INFO_STATUS, writer, INFO_STATUS_INVALID_NAME)
 				return None, "name is empty"
 
 			print(f"Client {addr} logged as \"{name}\"")
-			writer.write(bytes([PACKETTYPE_INFOSTATUS]) + struct.pack("<?", True))
+			await self.pack_and_send_msg(PACKETTYPE_INFO_STATUS, writer, INFO_STATUS_OK)
 			self.clients[writer] = name
 
 			await self.pack_and_send_msg(PACKETTYPE_CL_CONNECT, writer, name)
@@ -145,4 +149,7 @@ class Server:
 
 if __name__ == "__main__":
 	server = Server("localhost", 8888)
-	asyncio.run(server.run())
+	try:
+		asyncio.run(server.run())
+	except KeyboardInterrupt:
+		print("Server shutting down...")

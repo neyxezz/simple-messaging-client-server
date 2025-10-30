@@ -6,11 +6,15 @@ PACKETTYPE_INFO = 0  # Used by the client to send client information
 # 2. The server validates the name against requirements (not already taken, length within 1-255 characters).
 # 3. The server sends a PACKETTYPE_INFOSTATUS to inform the client about the success or failure.
 
-PACKETTYPE_INFOSTATUS = 1  # Used by the server to provide success information regarding client information
+PACKETTYPE_INFO_STATUS = 1  # Used by the server to provide status information regarding client info
 # Workflow:
 # 1. The server sends this packet to the client in response to a PACKETTYPE_INFO.
-# 2. Contains a single byte indicating whether the client's name registration was successful (True) or not (False).
+# 2. Contains a single byte indicating info status, INFO_STATUS_OK, INFO_STATUS_NAME_TAKEN, INFO_STATUS_INVALID_NAME
 # 3. The client displays the corresponding success or error message.
+
+INFO_STATUS_OK = 0
+INFO_STATUS_NAME_TAKEN = 1
+INFO_STATUS_INVALID_NAME = 2
 
 PACKETTYPE_PING = 2  # Client pings the server
 # Workflow:

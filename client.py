@@ -57,13 +57,15 @@ class Client:
 			await self.writer.drain()
 
 	async def unpack_packet(self, PACKETTYPE):
-		if PACKETTYPE == PACKETTYPE_INFOSTATUS:
-			success = await self.reader.readexactly(1)
-			success = struct.unpack("<?", success)[0]
-			if success is True:
+		if PACKETTYPE == PACKETTYPE_INFO_STATUS:
+			status = await self.reader.readexactly(1)
+			status = struct.unpack("<B", status)[0]
+			if status == INFO_STATUS_OK:
 				printpadd(to_green("Successfully connected! Type \"*help\" for help"))
-			elif success is False:
-				printinfo(to_red("Incorrect name (name mathes the existing one or its longer/shorter than 1-255 symbols)"))
+			if status == INFO_STATUS_NAME_TAKEN:
+				printinfo(to_red("Your name matches the existing one"))
+			if status == INFO_STATUS_INVALID_NAME:
+				printinfo(to_red("Your name is shorter/longer than 1-255 symbols"))
 
 		if PACKETTYPE == PACKETTYPE_PING:
 			printpadd(f"Latency - {(time.time()-self.last_ping)*1000:.2f} ms")
@@ -184,4 +186,7 @@ class Client:
 
 if __name__ == "__main__":
 	client = Client("localhost", 8888)
-	asyncio.run(client.run())
+	try:
+		asyncio.run(client.run())
+	except KeyboardInterrupt as e:
+		pass
