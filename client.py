@@ -7,8 +7,7 @@ import struct
 import time
 
 from packettypes import *
-
-from colors import to_red, to_green, to_yellow, to_cyan
+from colors import *
 
 name = input("Enter your name: ")
 
@@ -54,6 +53,10 @@ class Client:
 			message_encoded_length = struct.pack("<I", len(message_encoded))
 
 			self.writer.write(bytes([PACKETTYPE_MSG]) + message_encoded_length + message_encoded)
+			await self.writer.drain()
+
+		if PACKETTYPE == PACKETTYPE_CLIENT_LIST:
+			self.writer.write(bytes([PACKETTYPE_CLIENT_LIST]))
 			await self.writer.drain()
 
 	async def unpack_packet(self, PACKETTYPE):
@@ -104,6 +107,12 @@ class Client:
 			name = name.decode('utf-8')
 			printpadd(to_yellow(f"'{name}' has disconnected"))
 
+		if PACKETTYPE == PACKETTYPE_CLIENT_LIST:
+			clients_length = struct.unpack("<B", await self.reader.readexactly(1))[0]
+			clients = await self.reader.readexactly(clients_length)
+			clients = clients.decode('utf-8')
+			printpadd(to_purple(clients))
+
 	async def process_packets(self):
 		while True:
 			await asyncio.sleep(0.01)
@@ -123,7 +132,7 @@ class Client:
 		need_continue = False
 		need_break = False
 		if message.lower() == '*help':
-			printinfo("*ping - get latency, *uptime - server uptime, *exit - disconnect from server")
+			printinfo(to_purple("*ping - get latency\n*uptime - server uptime\n*clients - client list\n*exit - disconnect from server"))
 		elif message.lower() == '*ping':
 			await self.pack_and_send(PACKETTYPE_PING)
 			need_continue = True
@@ -133,6 +142,9 @@ class Client:
 		elif message.startswith("*file"):
 			file = " ".join(message.split()[1:])
 			printinfo(file)
+		elif message.lower() == "*clients":
+			await self.pack_and_send(PACKETTYPE_CLIENT_LIST)
+			need_continue = True
 		elif message.lower() == '*exit':
 			need_break = True
 		if message.strip() == '':
@@ -185,7 +197,7 @@ class Client:
 				pass
 
 if __name__ == "__main__":
-	client = Client("localhost", 8888)
+	client = Client("194.87.147.60", 8888)
 	try:
 		asyncio.run(client.run())
 	except KeyboardInterrupt as e:

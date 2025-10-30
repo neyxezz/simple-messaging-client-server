@@ -60,6 +60,20 @@ class Server:
 		if PACKETTYPE == PACKETTYPE_MSG:
 			await self.handle_message(reader, writer, addr, name)
 
+		if PACKETTYPE == PACKETTYPE_CLIENT_LIST:
+			clients_string = ""
+			for w, name in self.clients.items():
+				try:
+					clients_string += f"- {name}\n"
+
+				except Exception as e:
+					pass
+
+			clients_string_encoded = clients_string[:-2].encode('utf-8')
+			clients_string_length = struct.pack("<B", len(clients_string_encoded))
+			writer.write(bytes([PACKETTYPE_CLIENT_LIST]) + clients_string_length + clients_string_encoded)
+			await writer.drain()
+
 	async def handle_message(self, reader, writer, addr, name):
 		message_length = struct.unpack("<I", await reader.readexactly(4))[0]
 		message = await reader.readexactly(message_length)
@@ -148,7 +162,7 @@ class Server:
 			await server.serve_forever()
 
 if __name__ == "__main__":
-	server = Server("localhost", 8888)
+	server = Server("194.87.147.60", 8888)
 	try:
 		asyncio.run(server.run())
 	except KeyboardInterrupt:

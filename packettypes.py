@@ -50,3 +50,5 @@ PACKETTYPE_CL_DISCONNECT = 7  # Someone disconnected
 # 1. The server sends this packet to all clients when a client has disconnected.
 # 2. Contains the name of the disconnected client.
 # 3. The client displays a message about the client disconnecting.
+
+PACKETTYPE_CLIENT_LIST = 8
