@@ -3,7 +3,7 @@ import asyncio
 import struct
 import time
 
-from packettypes import *
+from protocol import *
 
 from colors import YELLOW, RESET
 
@@ -20,7 +20,10 @@ class Server:
 
 	async def pack_and_send_msg(self, PACKETTYPE, writer, *data):
 		if PACKETTYPE == PACKETTYPE_INFO_STATUS:
-			writer.write(bytes([PACKETTYPE_INFO_STATUS]) + bytes([data[0]]))
+			message_to_send = bytes([PACKETTYPE_INFO_STATUS]) + bytes([data[0]])
+			if(len(data) > 1):
+				message_to_send += bytes([data[1]])
+			writer.write(message_to_send)
 			await writer.drain()
 
 		if PACKETTYPE == PACKETTYPE_CL_MSG:
@@ -53,7 +56,7 @@ class Server:
 			await writer.drain()
 
 		if PACKETTYPE == PACKETTYPE_UPTIME:
-			uptime = struct.pack("<q", int((time.time()-start_time)*100))
+			uptime = struct.pack("<Q", int((time.time()-start_time)*100))
 			writer.write(bytes([PACKETTYPE_UPTIME]) + uptime)
 			await writer.drain()
 
@@ -61,17 +64,21 @@ class Server:
 			await self.handle_message(reader, writer, addr, name)
 
 		if PACKETTYPE == PACKETTYPE_CLIENT_LIST:
-			clients_string = ""
-			for w, name in self.clients.items():
+			names_count = struct.pack("<B", len(self.clients.items()))
+			max_names_count = struct.pack("<B", MAX_CLIENTS)
+			names = bytes()
+			for w, clname in self.clients.items():
 				try:
-					clients_string += f"- {name}\n"
+					name_encoded = clname[:250].encode('utf-8')
+					name_encoded_length = struct.pack("<B", len(name_encoded))
+					
+					names += name_encoded_length
+					names += name_encoded
 
 				except Exception as e:
-					pass
+					print(traceback.format_exc())
 
-			clients_string_encoded = clients_string[:-2].encode('utf-8')
-			clients_string_length = struct.pack("<B", len(clients_string_encoded))
-			writer.write(bytes([PACKETTYPE_CLIENT_LIST]) + clients_string_length + clients_string_encoded)
+			writer.write(bytes([PACKETTYPE_CLIENT_LIST]) + names_count + max_names_count + names)
 			await writer.drain()
 
 	async def handle_message(self, reader, writer, addr, name):
@@ -98,6 +105,22 @@ class Server:
 	async def process_client_info(self, reader, writer, addr):
 		msg_type = await self.unpack_int(await reader.readexactly(1))
 
+		same_ip = 1
+		for w, name in self.clients.items():
+			try:
+				if writer.get_extra_info('peername')[0] == w.get_extra_info('peername')[0]:
+					same_ip += 1
+			except Exception as e:
+				pass
+
+		if same_ip > MAX_CLIENTS_PER_IP:
+			await self.pack_and_send_msg(PACKETTYPE_INFO_STATUS, writer, INFO_STATUS_TOO_MANY_CLIENTS_PER_IP, MAX_CLIENTS_PER_IP)
+			return None, f"only {MAX_CLIENTS_PER_IP} clients per IP allowed"
+
+		if len(self.clients.items()) >= MAX_CLIENTS:
+			await self.pack_and_send_msg(PACKETTYPE_INFO_STATUS, writer, INFO_STATUS_SERVER_FULL, MAX_CLIENTS)
+			return None, "server is full"
+
 		if msg_type == PACKETTYPE_INFO:
 			name_length = struct.unpack("<B", await reader.readexactly(1))[0]
 			name = await reader.readexactly(name_length)
@@ -107,9 +130,9 @@ class Server:
 				if name == clname:
 					await self.pack_and_send_msg(PACKETTYPE_INFO_STATUS, writer, INFO_STATUS_NAME_TAKEN)
 					return None, "name already exists"
-			if not name:
+			if not name or not name.strip():
 				await self.pack_and_send_msg(PACKETTYPE_INFO_STATUS, writer, INFO_STATUS_INVALID_NAME)
-				return None, "name is empty"
+				return None, "invalid name"
 
 			print(f"Client {addr} logged as \"{name}\"")
 			await self.pack_and_send_msg(PACKETTYPE_INFO_STATUS, writer, INFO_STATUS_OK)
@@ -162,7 +185,7 @@ class Server:
 			await server.serve_forever()
 
 if __name__ == "__main__":
-	server = Server("194.87.147.60", 8888)
+	server = Server("localhost", 8888)
 	try:
 		asyncio.run(server.run())
 	except KeyboardInterrupt:

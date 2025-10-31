@@ -6,7 +6,7 @@ import asyncio
 import struct
 import time
 
-from packettypes import *
+from protocol import *
 from colors import *
 
 name = input("Enter your name: ")
@@ -16,7 +16,6 @@ def printinfo(text):
 
 def printpadd(text):
 	print(f"\r\033[K{text}\n> ", end="")
-
 
 class Client:
 	def __init__(self, host='127.0.0.1', port=8888):
@@ -69,6 +68,14 @@ class Client:
 				printinfo(to_red("Your name matches the existing one"))
 			if status == INFO_STATUS_INVALID_NAME:
 				printinfo(to_red("Your name is shorter/longer than 1-255 symbols"))
+			if status == INFO_STATUS_SERVER_FULL:
+				max_clients = await self.reader.readexactly(1)
+				max_clients = struct.unpack("<B", max_clients)[0]
+				printinfo(to_red(f"Server is full, try connect later ({max_clients}/{max_clients})"))
+			if status == INFO_STATUS_TOO_MANY_CLIENTS_PER_IP:
+				max_clients = await self.reader.readexactly(1)
+				max_clients = struct.unpack("<B", max_clients)[0]
+				printinfo(to_red(f"Only {max_clients} clients per IP allowed"))
 
 		if PACKETTYPE == PACKETTYPE_PING:
 			printpadd(f"Latency - {(time.time()-self.last_ping)*1000:.2f} ms")
@@ -108,14 +115,25 @@ class Client:
 			printpadd(to_yellow(f"'{name}' has disconnected"))
 
 		if PACKETTYPE == PACKETTYPE_CLIENT_LIST:
-			clients_length = struct.unpack("<B", await self.reader.readexactly(1))[0]
-			clients = await self.reader.readexactly(clients_length)
-			clients = clients.decode('utf-8')
-			printpadd(to_purple(clients))
+			names_count = struct.unpack("<B", await self.reader.readexactly(1))[0]
+			max_names_count = struct.unpack("<B", await self.reader.readexactly(1))[0]
+
+			clients = ""
+			for x in range(names_count):
+				name_length = struct.unpack("<B", await self.reader.readexactly(1))[0]
+				client_name = await self.reader.readexactly(name_length)
+				client_name = client_name.decode('utf-8')
+	
+				if x == 0:
+					clients += f"{names_count}/{max_names_count}\n"
+				clients += f"- {client_name}\n"
+		
+			printpadd(to_purple(clients[:-1]))
 
 	async def process_packets(self):
+		await asyncio.sleep(0.01)
 		while True:
-			await asyncio.sleep(0.01)
+			#await asyncio.sleep(0.01)
 
 			try:
 				msg_type = await self.unpack_int(await self.reader.readexactly(1))
@@ -197,7 +215,7 @@ class Client:
 				pass
 
 if __name__ == "__main__":
-	client = Client("194.87.147.60", 8888)
+	client = Client("localhost", 8888)
 	try:
 		asyncio.run(client.run())
 	except KeyboardInterrupt as e:
