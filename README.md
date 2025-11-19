@@ -8,12 +8,12 @@ To clone the repository, use the following command:
 https://github.com/neyxezz/simple-messaging-client-server.git
 ```
 # Installation and Startup
-* To clone the repository, use the following command:
+* Install aioconsole:
     ```
     pip install aioconsole
     ```
 * Start the server:
-   - If necessary, change the IP address and port in the last lines of the server.py file (in Linux, you can find the IP address using the ip addr command).
+   - If necessary, change the IP address and port in the last lines of the server.py file (in Linux, you can find the IP address using the `ip addr` command).
    - Run the command:
     ```
     python3 server.py
@@ -24,3 +24,6 @@ https://github.com/neyxezz/simple-messaging-client-server.git
     ```
     python3 client.py
     ```
+# TODO:
+* More flexible CLI
+* Configs
