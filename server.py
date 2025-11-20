@@ -1,11 +1,19 @@
+import subprocess
 import traceback
 import asyncio
 import struct
+import select
 import time
 
 from protocol import *
 
 from colors import YELLOW, RESET
+
+"""process = subprocess.Popen(['bash', '-c', 'source ~/.v/bin/activate && python3 bot.py'],
+	stdin=subprocess.PIPE,
+	stdout=subprocess.PIPE,
+	stderr=subprocess.PIPE,
+	text=True)"""
 
 start_time = time.time()
 
@@ -89,6 +97,9 @@ class Server:
 			return
 		print(f"{addr} - {name}: {message}")
 
+		"""process.stdin.write(f"`{name}`: {message}\n")
+		process.stdin.flush()"""
+
 		# message for all clients
 		await self.pack_and_send_msg(PACKETTYPE_CL_MSG, writer, name, message)
 
@@ -138,6 +149,9 @@ class Server:
 			await self.pack_and_send_msg(PACKETTYPE_INFO_STATUS, writer, INFO_STATUS_OK)
 			self.clients[writer] = name
 
+			"""process.stdin.write(f"`{name} has connected`\n")
+			process.stdin.flush()"""
+
 			await self.pack_and_send_msg(PACKETTYPE_CL_CONNECT, writer, name)
 
 			return name, "unknown"
@@ -167,6 +181,8 @@ class Server:
 		finally:
 			if writer in self.clients:
 				if name:
+					"""process.stdin.write(f"`{name} has disconnected`\n")
+					process.stdin.flush()"""
 					await self.pack_and_send_msg(PACKETTYPE_CL_DISCONNECT, writer, name)
 				del self.clients[writer] # remove from dict
 			writer.close()

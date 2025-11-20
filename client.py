@@ -4,12 +4,12 @@ import traceback
 import aioconsole
 import asyncio
 import struct
+import json
 import time
 
 from protocol import *
 from colors import *
-
-name = input("Enter your name: ")
+from utils import *
 
 def printinfo(text):
 	print(f"\r\033[K{text}")
@@ -19,11 +19,15 @@ def printpadd(text):
 
 class Client:
 	def __init__(self, host='127.0.0.1', port=8888):
-		self.host = host
-		self.port = port
 		self.reader = None
 		self.writer = None
 		self.last_ping = time.time()
+
+		self.config = get_values(load_config())
+
+		ip_port = get_ipv4(self.config["ip_port"])
+		self.host = ip_port[0]
+		self.port = ip_port[1]
 
 	async def unpack_int(self, data):
 		return int.from_bytes(data, 'little')
@@ -32,7 +36,7 @@ class Client:
 		to_send = bytes([PACKETTYPE])
 		if PACKETTYPE == PACKETTYPE_INFO:
 			# name
-			name_encoded = name.encode('utf-8')
+			name_encoded = data[0].encode('utf-8')
 			name_encoded_length = struct.pack("<B", len(name_encoded))
 
 			self.writer.write(bytes([PACKETTYPE_INFO]) + name_encoded_length + name_encoded)
@@ -134,27 +138,25 @@ class Client:
 		await asyncio.sleep(0.01)
 		while True:
 			#await asyncio.sleep(0.01)
-
 			try:
 				msg_type = await self.unpack_int(await self.reader.readexactly(1))
 				await self.unpack_packet(msg_type)
 
 			except asyncio.IncompleteReadError:
-				print("Server closed connection.")
 				break
 			except Exception as e:
-				print(f"Error: {e}")
+				print(to_red(f"Error: {e}"))
 				break
 
 	async def process_commands(self, message):
 		need_continue = False
 		need_break = False
-		if message.lower() == '*help':
-			printinfo(to_purple("*ping - get latency\n*uptime - server uptime\n*clients - client list\n*exit - disconnect from server"))
-		elif message.lower() == '*ping':
+		if message.lower() == "*help":
+			printinfo(to_purple("*ping - get latency\n*uptime - server uptime\n*clients - client list\n*config - edit configuration\n*exit - disconnect from server"))
+		elif message.lower() == "*ping":
 			await self.pack_and_send(PACKETTYPE_PING)
 			need_continue = True
-		elif message.lower() == '*uptime':
+		elif message.lower() == "*uptime":
 			await self.pack_and_send(PACKETTYPE_UPTIME)
 			need_continue = True
 		elif message.startswith("*file"):
@@ -163,8 +165,21 @@ class Client:
 		elif message.lower() == "*clients":
 			await self.pack_and_send(PACKETTYPE_CLIENT_LIST)
 			need_continue = True
-		elif message.lower() == '*exit':
+		elif message.startswith("*config"):
+			parts = message.split()
+			if len(parts) < 2:
+				printinfo(to_cyan("Use *config <name|ip_port>"))
+			else:
+				try:
+					self.config[parts[1]] = None
+					save_config(self.config)
+					printinfo(to_yellow(f"Config '{parts[1]}' was successfully deleted, restart the client"))
+				except:
+					printinfo(to_red(f"Config '{parts[1]}' does not exist"))
+		elif message.lower() == "*exit":
 			need_break = True
+		else:
+			printinfo(to_red("Unknown command. Use *help"))
 		if message.strip() == '':
 			need_continue = True
 		return need_continue, need_break
@@ -175,9 +190,9 @@ class Client:
 	async def run(self):
 		self.reader, self.writer = await asyncio.open_connection(self.host, self.port)
 
-		printinfo('Connecting...')
+		printinfo(to_cyan("Connecting..."))
 		periodic_task = asyncio.create_task(self.process_packets())
-		await self.pack_and_send(PACKETTYPE_INFO, name)
+		await self.pack_and_send(PACKETTYPE_INFO, self.config["name"])
 
 		try:
 			while True:
@@ -189,7 +204,7 @@ class Client:
 
 				if user_input_task in done:
 					message = user_input_task.result()
-					if message.startswith("*"):
+					if message.startswith("*") and len(message) > 1:
 						need_continue, need_break = await self.process_commands(message)
 						if need_continue:
 							continue
@@ -203,8 +218,9 @@ class Client:
 
 		except Exception as e:
 			printinfo(f"Error: {e}")
+			print(traceback.format_exc())
 		finally:
-			printinfo('Connection closed.')
+			printinfo(to_red("Connection refused."))
 			self.writer.close()
 			await self.writer.wait_closed()
 
@@ -215,8 +231,17 @@ class Client:
 				pass
 
 if __name__ == "__main__":
-	client = Client("localhost", 8888)
-	try:
-		asyncio.run(client.run())
-	except KeyboardInterrupt as e:
-		pass
+	while True:
+		client = Client()
+		try:
+			asyncio.run(client.run())
+		except ConnectionRefusedError as e:
+			ip_addr = "".join(str(e).split("(")[-1])[:-1]
+			if input(to_red(f"{ip_addr} didn't responding, change IP? (Y/n): ")).lower() != "n":
+				config = load_config()
+				config["ip_port"] = None
+				get_values(config)
+			else:
+				break
+		except KeyboardInterrupt as e:
+			break

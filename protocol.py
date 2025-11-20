@@ -113,5 +113,5 @@ PACKETTYPE_CLIENT_LIST = 8 # Client list
 
 """other"""
 
-MAX_CLIENTS = 16
+MAX_CLIENTS = 16 # WARNING: allowed value up to 255 (or more idk)
 MAX_CLIENTS_PER_IP = 2
