@@ -25,5 +25,4 @@ https://github.com/neyxezz/simple-messaging-client-server.git
     python3 client.py
     ```
 # TODO:
-* More flexible CLI
-* Configs
+* Rewrite to UDP
